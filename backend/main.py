@@ -60,14 +60,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+def _get_cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        # Comma-separated list, e.g.:
+        # CORS_ORIGINS=https://crm-beamwelly-3.onrender.com,http://localhost:8080
+        return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+    return [
+        "http://localhost:8080",
+        "https://crm-beamwelly-3.onrender.com",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",  # for local development
-        "https://crm-frontend.onrender.com",  # for production frontend on Render
-        "https://crm-akhila-frontend.onrender.com"
-        "allow_origins"
-    ],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
