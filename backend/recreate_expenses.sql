@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS expenses CASCADE;
+
+CREATE TABLE expenses (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    department VARCHAR NOT NULL,
+    date DATE NOT NULL,
+    description VARCHAR,
+    receipt_url VARCHAR,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+); 

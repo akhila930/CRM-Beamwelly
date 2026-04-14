@@ -1,0 +1,311 @@
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware import Middleware
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from datetime import datetime, timedelta, date
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from typing import Optional, List
+import secrets
+import smtplib
+from email.mime.text import MIMEText
+from sqlalchemy.orm import Session
+import os
+from dotenv import load_dotenv
+from database import get_db, SessionLocal, engine
+from models import Base, User, Budget, DepartmentBudget, SocialMediaCampaign, CampaignStatus
+from routes import auth, employee, recruitment, budget, social
+from auth import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    get_current_user,
+    require_role,
+    oauth2_scheme
+)
+import logging
+
+# Load environment variables
+load_dotenv()
+
+# Email configuration
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "your_email@gmail.com")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "your_app_password")
+EMAIL_FROM = EMAIL_HOST_USER
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Initialize FastAPI app with all middleware configurations
+app = FastAPI(title="HR Management System API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080"],  # Only allow localhost:8080
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Include routers
+app.include_router(auth.router)
+app.include_router(employee.router, prefix="/api/employees", tags=["employees"])
+app.include_router(recruitment.router)
+app.include_router(budget.router, prefix="/api/budgets", tags=["budgets"])
+app.include_router(social.router)
+
+# Configuration
+SECRET_KEY = secrets.token_urlsafe(32)
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Models
+class UserBase(BaseModel):
+    name: str
+    email: str
+    role: str
+
+class UserCreate(UserBase):
+    password: str
+
+class UserInDB(UserBase):
+    hashed_password: str
+    disabled: bool = False
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+class VerificationRequest(BaseModel):
+    email: str
+    otp: str
+
+class ResendVerificationRequest(BaseModel):
+    email: str
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Database dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Helper functions
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def send_verification_email(email: str, otp: str, background_tasks: BackgroundTasks):
+    message = f"""Your verification code is: {otp}
+    
+This code will expire in 10 minutes. If you didn't request this code, please ignore this email."""
+    
+    # Check if email credentials are configured
+    if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD or EMAIL_HOST_USER == "your_email@gmail.com" or EMAIL_HOST_PASSWORD == "your_app_password":
+        print(f"[DEV MODE] Email credentials not configured. Please set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD in .env file")
+        print(f"[DEV MODE] Would have sent verification code: {otp} to {email}")
+        return
+    
+    msg = MIMEText(message)
+    msg['Subject'] = 'Verify your email'
+    msg['From'] = EMAIL_FROM
+    msg['To'] = email
+    
+    def send_email():
+        try:
+            print(f"Attempting to send email to {email} using SMTP server {EMAIL_HOST}:{EMAIL_PORT}")
+            with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+                server.starttls()
+                print("Connected to SMTP server, attempting login...")
+                server.login(EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)
+                print("Login successful, sending email...")
+                server.send_message(msg)
+                print(f"Verification email sent successfully to {email}")
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"SMTP Authentication Error: {str(e)}")
+            print("Please check your email credentials in .env file")
+        except smtplib.SMTPException as e:
+            print(f"SMTP Error: {str(e)}")
+        except Exception as e:
+            print(f"Failed to send email: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    background_tasks.add_task(send_email)
+
+def generate_otp():
+    return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+# Auth endpoints
+@app.post("/api/auth/signup", response_model=dict)
+async def signup(
+    user: UserCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    try:
+        print(f"Received signup request for: {user.email}")
+        
+        # Validate email format
+        if not "@" in user.email or not "." in user.email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check if user exists
+        db_user = db.query(User).filter(User.email == user.email).first()
+        if db_user:
+            print(f"User with email {user.email} already exists")
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Validate password
+        if len(user.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+        
+        # Generate OTP
+        otp = generate_otp()
+        verification_token_expires = datetime.utcnow() + timedelta(minutes=10)
+        
+        # Create and save user
+        print(f"Creating user: {user.name}, {user.email}, {user.role}")
+        hashed_password = get_password_hash(user.password)
+        db_user = User(
+            name=user.name,
+            email=user.email,
+            role=user.role,
+            hashed_password=hashed_password,
+            is_active=True,
+            is_verified=False,
+            verification_token=otp,
+            verification_token_expires=verification_token_expires
+        )
+        
+        print("Adding user to database...")
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        print(f"User created with ID: {db_user.id}")
+        
+        # Send verification email
+        await send_verification_email(user.email, otp, background_tasks)
+        
+        return {"message": "User created successfully. Please check your email for verification code."}
+    except Exception as e:
+        db.rollback()
+        print(f"Error in signup: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating user: {str(e)}"
+        )
+
+@app.post("/api/auth/token", response_model=Token)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email not verified",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserBase)
+async def read_users_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return current_user
+
+@app.post("/api/auth/verify-email", response_model=dict)
+async def verify_email(
+    verification: VerificationRequest,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == verification.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.is_verified:
+        return {"message": "Email already verified"}
+    
+    if user.verification_token != verification.otp:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    if user.verification_token_expires < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification code expired")
+    
+    user.is_verified = True
+    user.verification_token = None
+    user.verification_token_expires = None
+
+    db.commit()
+    return {"message": "Email verified successfully"}
+
+@app.post("/api/auth/resend-verification", response_model=dict)
+async def resend_verification(
+    request: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.is_verified:
+        return {"message": "Email already verified"}
+    
+    # Generate new OTP
+    otp = generate_otp()
+    verification_token_expires = datetime.utcnow() + timedelta(minutes=10)
+    
+    user.verification_token = otp
+    user.verification_token_expires = verification_token_expires
+
+    db.commit()
+    
+    # Send verification email
+    await send_verification_email(user.email, otp, background_tasks)
+    
+    return {"message": "Verification code sent successfully"}
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to HR Management System API"}
