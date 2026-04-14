@@ -8,8 +8,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres.qhkfyurzzltgrpqiaipm:equitywala%401234@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
-# SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not SQLALCHEMY_DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable not set. "
+        "Set it in your environment (e.g., Render service env vars)."
+    )
 
 # print(f"DEBUG: Connecting with SQLALCHEMY_DATABASE_URL: '{SQLALCHEMY_DATABASE_URL}'")
 
