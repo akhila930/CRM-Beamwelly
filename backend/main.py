@@ -66,6 +66,7 @@ app.add_middleware(
         "http://localhost:8080",  # for local development
         "https://crm-frontend.onrender.com",  # for production frontend on Render
         "https://crm-akhila-frontend.onrender.com"
+        "allow_origins"
     ],
     allow_credentials=True,
     allow_methods=["*"],
