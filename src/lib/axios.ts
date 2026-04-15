@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { getApiBaseUrl } from './runtimeConfig';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+  baseURL: getApiBaseUrl(),
   timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
   withCredentials: true,
   headers: {
@@ -26,9 +27,6 @@ api.interceptors.request.use(
     if (config.responseType === 'blob') {
       config.headers['Accept'] = 'text/csv';
     }
-    // Add CORS headers
-    config.headers['Access-Control-Allow-Origin'] = 'http://localhost:8080';
-    config.headers['Access-Control-Allow-Credentials'] = 'true';
     return config;
   },
   (error) => {

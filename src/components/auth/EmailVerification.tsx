@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useZoomIn } from "@/lib/animations";
 import axios from "axios";
+import { getApiBaseUrl } from "@/lib/runtimeConfig";
 
 interface EmailVerificationProps {
   email: string;
@@ -30,7 +31,7 @@ export function EmailVerification({ email }: EmailVerificationProps) {
 
     setIsLoading(true);
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/verify-email`, {
+      const response = await axios.post(`${getApiBaseUrl()}/api/auth/verify-email`, {
         email,
         otp,
       });
@@ -56,7 +57,7 @@ export function EmailVerification({ email }: EmailVerificationProps) {
   const handleResendCode = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/auth/resend-otp`, {
+      const response = await axios.post(`${getApiBaseUrl()}/api/auth/resend-otp`, {
         email,
       });
 

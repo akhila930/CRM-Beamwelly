@@ -482,15 +482,16 @@ async def add_task(
         if document:
             import os
             from uuid import uuid4
-            upload_dir = "uploaded_task_docs"
-            os.makedirs(upload_dir, exist_ok=True)
+            upload_base = Path(os.getenv("UPLOAD_DIR", "uploads"))
+            upload_dir = upload_base / "task_docs"
+            upload_dir.mkdir(parents=True, exist_ok=True)
             ext = os.path.splitext(document.filename)[1]
             file_id = str(uuid4())
-            file_path = os.path.join(upload_dir, f"{file_id}{ext}")
+            file_path = upload_dir / f"{file_id}{ext}"
             with open(file_path, "wb") as f:
                 f.write(await document.read())
             # Use relative URL for Render compatibility
-            document_url = f"/uploaded_task_docs/{file_id}{ext}"
+            document_url = f"/uploads/task_docs/{file_id}{ext}"
         # Parse tags if provided
         tags_list = None
         if tags:
@@ -569,11 +570,12 @@ async def update_task(
         if document:
             import os
             from uuid import uuid4
-            upload_dir = "uploaded_task_docs"
-            os.makedirs(upload_dir, exist_ok=True)
+            upload_base = Path(os.getenv("UPLOAD_DIR", "uploads"))
+            upload_dir = upload_base / "task_docs"
+            upload_dir.mkdir(parents=True, exist_ok=True)
             ext = os.path.splitext(document.filename)[1]
             file_id = str(uuid4())
-            file_path = os.path.join(upload_dir, f"{file_id}{ext}")
+            file_path = upload_dir / f"{file_id}{ext}"
             with open(file_path, "wb") as f:
                 f.write(await document.read())
             print(f"[UPDATE TASK] Uploaded new document: {file_path}")
@@ -587,7 +589,7 @@ async def update_task(
                     except Exception as e:
                         print(f"[UPDATE TASK] Failed to delete old document: {e}")
             # Use relative URL for Render compatibility
-            task.document_url = f"/uploaded_task_docs/{file_id}{ext}"
+            task.document_url = f"/uploads/task_docs/{file_id}{ext}"
         # Parse tags if provided
         tags_list = None
         if tags:

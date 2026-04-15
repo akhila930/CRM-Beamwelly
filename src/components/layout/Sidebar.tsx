@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useSequentialFadeIn } from '@/lib/animations';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { toAbsoluteApiUrl } from '@/lib/runtimeConfig';
 
 type NavItem = {
   title: string;
@@ -174,7 +175,7 @@ export function Sidebar({ className }: SidebarProps) {
             {/* Display company logo if available, otherwise company name or default */}
             {user?.logo_url ? (
               <img
-                src={`http://localhost:8000${user.logo_url}`}
+                src={toAbsoluteApiUrl(user.logo_url)}
                 alt="Company Logo"
                 className={cn(
                   "transition-all duration-300 max-h-10",

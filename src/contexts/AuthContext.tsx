@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { getApiBaseUrl } from "@/lib/runtimeConfig";
 
 export interface User {
   id: string;
@@ -49,7 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       formData.append('username', email);
       formData.append('password', password);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/token`, {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/auth/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -66,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('token', access_token);
 
       // Fetch user profile
-      const userResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/me`, {
+      const userResponse = await fetch(`${baseUrl}/api/auth/me`, {
         headers: {
           'Authorization': `Bearer ${access_token}`,
         },
@@ -115,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const body: any = { name, email, password, role };
       if (company_name) body.company_name = company_name;
       if (num_employees) body.num_employees = Number(num_employees);
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/auth/signup`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,10 +1,50 @@
 services:
+  # Frontend (Vite/React) - Static Site
   - type: web
     name: crm-frontend
     env: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    envVars:
+      # Set this in Render (Static Site env vars) to your backend URL, e.g.:
+      # https://crm-backend.onrender.com/
+      - key: VITE_API_BASE_URL
+        sync: false
+
+  # Backend (FastAPI) - Web Service
+  - type: web
+    name: crm-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      # Required runtime env vars (set in Render)
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      # Optional (only if you use email features)
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      # Optional (only if you use AI/social integrations)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_REDIRECT_URI
+        sync: false

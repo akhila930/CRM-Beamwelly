@@ -1,7 +1,9 @@
 import { Employee } from '@/types/employee';
 
 // API base URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { getApiBaseUrl } from "@/lib/runtimeConfig";
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Get auth headers from localStorage
 const getAuthHeaders = () => {

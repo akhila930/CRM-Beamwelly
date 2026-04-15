@@ -60,13 +60,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+def _get_cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        # Comma-separated list, e.g.:
+        # CORS_ORIGINS=https://crm-beamwelly-3.onrender.com,http://localhost:8080
+        return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+    return [
+        "http://localhost:8080",
+        "https://crm-beamwelly-3.onrender.com",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",  # for local development
-        "https://crm-frontend.onrender.com",  # for production frontend on Render
-        "https://crm-akhila-frontend.onrender.com"
-    ],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,11 +96,14 @@ ModelBase.metadata.create_all(bind=engine)
 
 
 # Create uploads directory if it doesn't exist
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("uploads/documents", exist_ok=True)
+UPLOAD_BASE_DIR = os.getenv("UPLOAD_DIR", "uploads")
+os.makedirs(UPLOAD_BASE_DIR, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_BASE_DIR, "documents"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_BASE_DIR, "logos"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_BASE_DIR, "task_docs"), exist_ok=True)
 
 # Mount static files directory for serving uploads
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_BASE_DIR), name="uploads")
 
 # Configure logging
 logging.basicConfig(

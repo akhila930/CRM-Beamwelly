@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
-from typing import List
+from typing import List, Optional, Any
 from datetime import datetime, timedelta
+import os
+from pathlib import Path
 
 from database import get_db
 from models import User, Task, Employee, TaskStatus
@@ -27,20 +29,59 @@ async def allow_any():
 @router.post("/", response_model=TaskSchema)
 async def create_new_task(
     request: Request,
-    title: str = Form(...),
-    description: str = Form(None),
-    assigned_to: int = Form(...),
-    due_date: str = Form(...),
-    priority: str = Form(...),
-    task_status: str = Form(...),
-    tags: str = Form(None),
-    comments: str = Form(None),
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    assigned_to: Optional[int] = Form(None),
+    due_date: Optional[str] = Form(None),
+    priority: Optional[str] = Form(None),
+    task_status: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    comments: Optional[str] = Form(None),
     document: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new task with optional document upload"""
+    """Create a new task.
+
+    Supports:
+    - application/json (recommended from SPA)
+    - multipart/form-data (for optional document upload)
+    """
     try:
+        # If JSON, read body and map to TaskCreate schema
+        content_type = (request.headers.get("content-type") or "").lower()
+        payload: Optional[TaskCreate] = None
+        if "application/json" in content_type:
+            body: Any = await request.json()
+            # Accept both "status" and legacy "task_status"
+            if isinstance(body, dict) and "task_status" in body and "status" not in body:
+                body["status"] = body.pop("task_status")
+            payload = TaskCreate(**body)
+            title = payload.title
+            description = payload.description
+            assigned_to = payload.assigned_to
+            due_date = payload.due_date.isoformat() if hasattr(payload.due_date, "isoformat") else str(payload.due_date)
+            priority = payload.priority
+            task_status = payload.status
+            tags_list = payload.tags
+            comments = payload.comments
+        else:
+            # multipart/form-data path
+            if title is None or assigned_to is None or due_date is None or priority is None or task_status is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Missing required fields. Send JSON or multipart/form-data with required fields.",
+                )
+
+            tags_list = None
+            if tags:
+                import json
+                try:
+                    parsed = json.loads(tags)
+                    tags_list = parsed if isinstance(parsed, list) else [str(parsed)]
+                except Exception:
+                    tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+
         # Validate that assigned_to employee exists
         assignee = db.query(Employee).filter(Employee.id == assigned_to).first()
         if not assignee:
@@ -54,28 +95,20 @@ async def create_new_task(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot assign task to employee from different company"
             )
-        # Handle file upload
+        # Handle file upload (multipart only)
         document_url = None
         if document:
-            import os
             from uuid import uuid4
-            upload_dir = "uploaded_task_docs"
-            os.makedirs(upload_dir, exist_ok=True)
+            upload_base = Path(os.getenv("UPLOAD_DIR", "uploads"))
+            upload_dir = upload_base / "task_docs"
+            upload_dir.mkdir(parents=True, exist_ok=True)
             ext = os.path.splitext(document.filename)[1]
             file_id = str(uuid4())
-            file_path = os.path.join(upload_dir, f"{file_id}{ext}")
+            file_path = upload_dir / f"{file_id}{ext}"
             with open(file_path, "wb") as f:
                 f.write(await document.read())
-            # Use relative URL for Render compatibility
-            document_url = f"/uploaded_task_docs/{file_id}{ext}"
-        # Parse tags if provided
-        tags_list = None
-        if tags:
-            import json
-            try:
-                tags_list = json.loads(tags)
-            except Exception:
-                tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+            # Use URL under /uploads mount
+            document_url = f"/uploads/task_docs/{file_id}{ext}"
         # Create the task
         now = datetime.utcnow()
         db_task = Task(
@@ -85,7 +118,7 @@ async def create_new_task(
             assigned_by=current_user.id,
             due_date=due_date,
             priority=priority,
-            status=task_status.lower(),
+            status=(task_status or "").lower(),
             tags=tags_list,
             comments=comments,
             created_at=now,

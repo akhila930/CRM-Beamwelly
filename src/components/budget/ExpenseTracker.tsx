@@ -35,6 +35,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Upload, Download, Filter, FileText, Trash, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { toAbsoluteApiUrl } from "@/lib/runtimeConfig";
 import api from "@/lib/axios";
 import { EditExpenseDialog } from "./EditExpenseDialog";
 
@@ -410,7 +411,7 @@ export function ExpenseTracker() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => window.open(`http://localhost:8000${expense.receipt_url}`, '_blank')}
+                          onClick={() => window.open(toAbsoluteApiUrl(expense.receipt_url), '_blank')}
                           title="View Receipt"
                         >
                           <FileText className="h-4 w-4" />
@@ -420,7 +421,7 @@ export function ExpenseTracker() {
                           size="icon"
                           onClick={async () => {
                             try {
-                              const response = await fetch(`http://localhost:8000${expense.receipt_url}`);
+                              const response = await fetch(toAbsoluteApiUrl(expense.receipt_url));
                               const blob = await response.blob();
                               const url = window.URL.createObjectURL(blob);
                               const a = document.createElement('a');
