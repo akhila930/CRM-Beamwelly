@@ -30,6 +30,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/axios";
+import { toAbsoluteApiUrl } from "@/lib/runtimeConfig";
 
 interface HeaderProps {
   title?: string;
@@ -68,8 +69,14 @@ export function Header({ title = "Dashboard" }: HeaderProps) {
 
   // Function to handle search
   const handleSearch = () => {
+    setSearchResults(searchItems(searchQuery));
     setSearchOpen(true);
   };
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    setSearchResults(searchItems(searchQuery));
+  }, [searchQuery, searchOpen]);
 
   // Function to handle search item selection
   const handleSelectSearchItem = (path: string) => {
@@ -181,12 +188,12 @@ export function Header({ title = "Dashboard" }: HeaderProps) {
             <Button variant="outline" size="icon" className="rounded-full p-0 overflow-hidden">
               {user?.avatar ? (
                 <Avatar className="h-full w-full">
-                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarImage src={toAbsoluteApiUrl(user.avatar)} alt={user.name} />
                   <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
               ) : user?.logo_url ? ( // Display company logo if available
                  <Avatar className="h-full w-full">
-                  <AvatarImage src={user.logo_url} alt="Company Logo" />
+                  <AvatarImage src={toAbsoluteApiUrl(user.logo_url)} alt="Company Logo" />
                   <AvatarFallback>{user.company_name ? user.company_name[0] : "C"}</AvatarFallback>
                 </Avatar>
               ) : (

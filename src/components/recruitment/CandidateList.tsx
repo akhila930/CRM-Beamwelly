@@ -12,6 +12,7 @@ import { MoreHorizontal, Mail, Phone, FileText, Calendar } from "lucide-react";
 import { useSequentialFadeIn } from "@/lib/animations";
 import api from "@/lib/axios";
 import { toast } from "sonner";
+import { toAbsoluteApiUrl } from "@/lib/runtimeConfig";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -288,7 +289,9 @@ export const CandidateList = ({ filter, stage }: CandidateListProps) => {
         >
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <Avatar className="h-12 w-12">
-              <AvatarImage src={candidate.resume_url || undefined} />
+              <AvatarImage
+                src={candidate.resume_url ? toAbsoluteApiUrl(candidate.resume_url) : undefined}
+              />
               <AvatarFallback>
                 {candidate.name.split(' ').map(n => n[0]).join('')}
               </AvatarFallback>

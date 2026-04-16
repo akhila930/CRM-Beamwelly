@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile, Request
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional, Any
 from database import get_db
 from models import Employee, Task, Document, Attendance, Milestone
 from schemas.employee import (
@@ -356,6 +356,7 @@ async def update_employee(
             detail=f"Error updating employee: {str(e)}"
         )
 
+@router.post("", response_model=EmployeeResponse)
 @router.post("/", response_model=EmployeeResponse)
 def create_employee(
     employee: EmployeeCreate,
@@ -458,13 +459,6 @@ async def delete_employee(
 @router.post("/{employee_id}/tasks", response_model=EmployeeResponse)
 async def add_task(
     employee_id: int,
-    title: str = Form(...),
-    description: str = Form(None),
-    due_date: str = Form(...),
-    priority: str = Form(...),
-    status: str = Form(...),
-    tags: str = Form(None),
-    comments: str = Form(None),
     document: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -477,6 +471,56 @@ async def add_task(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Employee not found"
             )
+
+        # Support JSON payloads from the React SPA (so we don't require Form fields)
+        title: Optional[str] = None
+        description: Optional[str] = None
+        due_date: Optional[str] = None
+        priority: Optional[str] = None
+        status: Optional[str] = None
+        tags: Optional[Any] = None
+        comments: Optional[str] = None
+
+        if request is not None:
+            content_type = (request.headers.get("content-type") or "").lower()
+        else:
+            content_type = ""
+
+        if "application/json" in content_type:
+            body = await request.json()
+            title = body.get("title")
+            description = body.get("description")
+            due_date = body.get("due_date")
+            priority = body.get("priority")
+            status = body.get("status", body.get("task_status"))
+            comments = body.get("comments")
+            tags = body.get("tags")
+        else:
+            # multipart/form-data path
+            form = await request.form()
+            title = form.get("title")
+            description = form.get("description")
+            due_date = form.get("due_date")
+            priority = form.get("priority")
+            status = form.get("status") or form.get("task_status")
+            tags = form.get("tags")
+            comments = form.get("comments")
+
+        # Validate required values
+        if not title or not due_date or not priority or not status:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Missing required fields (title, due_date, priority, status). Send JSON or multipart/form-data.",
+            )
+
+        # Normalize due_date to YYYY-MM-DD date string/Date-compatible value
+        if isinstance(due_date, str):
+            try:
+                due_date = datetime.strptime(due_date, "%Y-%m-%d").date()
+            except ValueError:
+                # keep as-is; downstream ORM may handle it
+                pass
+
         # Handle file upload
         document_url = None
         if document:
@@ -494,12 +538,17 @@ async def add_task(
             document_url = f"/uploads/task_docs/{file_id}{ext}"
         # Parse tags if provided
         tags_list = None
-        if tags:
-            import json
-            try:
-                tags_list = json.loads(tags)
-            except Exception:
-                tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tags is not None and tags != "":
+            if isinstance(tags, list):
+                tags_list = [str(t).strip() for t in tags if str(t).strip()]
+            else:
+                # Form values come in as string
+                import json
+                try:
+                    parsed = json.loads(tags)  # tags might be JSON stringified list
+                    tags_list = parsed if isinstance(parsed, list) else [str(parsed)]
+                except Exception:
+                    tags_list = [t.strip() for t in str(tags).split(",") if t.strip()]
         # Create new task with assigned_by set to current user
         from datetime import datetime
         now = datetime.utcnow()
@@ -538,13 +587,6 @@ async def add_task(
 async def update_task(
     employee_id: int,
     task_id: int,
-    title: str = Form(None),
-    description: str = Form(None),
-    due_date: str = Form(None),
-    priority: str = Form(None),
-    status: str = Form(None),
-    tags: str = Form(None),
-    comments: str = Form(None),
     document: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -566,6 +608,47 @@ async def update_task(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Task not found"
             )
+
+        # Support JSON payloads from the React SPA (JSON -> same fields as multipart/form-data)
+        title: Optional[str] = None
+        description: Optional[str] = None
+        due_date: Optional[str] = None
+        priority: Optional[str] = None
+        status: Optional[str] = None
+        tags: Optional[Any] = None
+        comments: Optional[str] = None
+
+        if request is not None:
+            content_type = (request.headers.get("content-type") or "").lower()
+        else:
+            content_type = ""
+
+        if "application/json" in content_type:
+            body = await request.json()
+            title = body.get("title")
+            description = body.get("description")
+            due_date = body.get("due_date")
+            priority = body.get("priority")
+            status = body.get("status", body.get("task_status"))
+            comments = body.get("comments")
+            tags = body.get("tags")
+        else:
+            form = await request.form()
+            title = form.get("title")
+            description = form.get("description")
+            due_date = form.get("due_date")
+            priority = form.get("priority")
+            status = form.get("status") or form.get("task_status")
+            tags = form.get("tags")
+            comments = form.get("comments")
+
+        # Normalize due_date if provided as YYYY-MM-DD
+        if isinstance(due_date, str) and due_date:
+            try:
+                due_date = datetime.strptime(due_date, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
         # Handle file upload
         if document:
             import os
@@ -592,12 +675,16 @@ async def update_task(
             task.document_url = f"/uploads/task_docs/{file_id}{ext}"
         # Parse tags if provided
         tags_list = None
-        if tags:
-            import json
-            try:
-                tags_list = json.loads(tags)
-            except Exception:
-                tags_list = [t.strip() for t in tags.split(",") if t.strip()]
+        if tags is not None and tags != "":
+            if isinstance(tags, list):
+                tags_list = [str(t).strip() for t in tags if str(t).strip()]
+            else:
+                import json
+                try:
+                    parsed = json.loads(tags)
+                    tags_list = parsed if isinstance(parsed, list) else [str(parsed)]
+                except Exception:
+                    tags_list = [t.strip() for t in str(tags).split(",") if t.strip()]
         # Update only provided fields
         if title is not None:
             task.title = title

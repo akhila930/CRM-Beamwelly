@@ -9,7 +9,6 @@ export function getApiBaseUrl(): string {
     "";
 
   const base = normalizeBaseUrl(String(raw || ""));
-  if (!base) return "http://localhost:8000";
   return base;
 }
 

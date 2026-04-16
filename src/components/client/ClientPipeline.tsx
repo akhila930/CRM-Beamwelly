@@ -19,6 +19,7 @@ import { toast } from "@/components/ui/use-toast";
 import * as ClientService from "@/services/leadClient";
 import { Textarea } from "@/components/ui/textarea";
 import { BulkImportTemplates } from "../leads/BulkImportTemplates";
+import { getApiBaseUrl } from "@/lib/runtimeConfig";
 
 export function ClientPipeline() {
   const [currentView, setCurrentView] = useState<'kanban' | 'list'>('kanban');
@@ -43,7 +44,7 @@ export function ClientPipeline() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/employees');
+      const response = await fetch(`${getApiBaseUrl()}/api/employees/`);
       const data = await response.json();
       setEmployees(data);
     } catch (error) {

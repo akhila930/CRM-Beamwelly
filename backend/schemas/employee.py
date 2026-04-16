@@ -126,7 +126,7 @@ class MilestoneCreate(MilestoneBase):
 class MilestoneUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[Union[date, str]] = None
     status: Optional[str] = None
     type: Optional[str] = None
 

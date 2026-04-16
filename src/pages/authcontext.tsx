@@ -3,8 +3,10 @@ import axios from 'axios'
 import { useToast } from '@/hooks/use-toast'
 import { useNavigate } from 'react-router-dom'
 
-// Base API URL - change this if your backend URL changes
-const API_BASE_URL = 'http://localhost:8000'
+import { getApiBaseUrl } from '@/lib/runtimeConfig'
+
+// Base API URL (production-safe)
+const API_BASE_URL = getApiBaseUrl()
 
 interface AuthContextType {
   user: any
