@@ -204,19 +204,26 @@ async def get_user_productivity_metrics(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return KPI metrics for tasks assigned to the current user"""
+    """Return KPI metrics.
+
+    - Admins see company-wide task KPIs.
+    - Non-admin users see KPIs for tasks assigned to their employee record.
+    """
     try:
         now = datetime.utcnow()
 
-        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
-        employee_id = employee.id if employee else None
+        # Always scope to user's company first
+        user_tasks_query = db.query(Task).filter(Task.company_name == current_user.company_name)
 
-        # Task.assigned_to points to Employee.id (not User.id)
-        user_tasks_query = db.query(Task)
-        if employee_id is None:
-            user_tasks_query = user_tasks_query.filter(Task.assigned_by == current_user.id)
-        else:
-            user_tasks_query = user_tasks_query.filter(Task.assigned_to == employee_id)
+        if current_user.role != "admin":
+            employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+            employee_id = employee.id if employee else None
+
+            # Task.assigned_to points to Employee.id (not User.id)
+            if employee_id is None:
+                user_tasks_query = user_tasks_query.filter(Task.assigned_by == current_user.id)
+            else:
+                user_tasks_query = user_tasks_query.filter(Task.assigned_to == employee_id)
         
         # Add logging to see the user ID and query counts
         print(f"Fetching productivity metrics for user ID: {current_user.id}")

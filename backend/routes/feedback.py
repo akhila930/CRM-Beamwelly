@@ -22,6 +22,18 @@ router = APIRouter(
     tags=["feedback"]
 )
 
+
+def _resolve_feedback_form_base_url() -> str:
+    explicit = (os.getenv("FEEDBACK_FORM_BASE_URL") or "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+
+    frontend = (os.getenv("FRONTEND_URL") or "").strip()
+    if frontend:
+        return frontend.rstrip("/")
+
+    return "https://crm-beamwelly-3.onrender.com"
+
 # Employee Feedback Routes
 @router.post("/employee", response_model=EmployeeFeedbackResponse)
 async def create_employee_feedback(
@@ -162,7 +174,7 @@ async def create_client_feedback_form(
         db.refresh(db_feedback)
         
         # Generate form URL
-        base_url = os.getenv("FRONTEND_URL", "http://localhost:8080")  # Updated default to match frontend
+        base_url = _resolve_feedback_form_base_url()
         form_url = f"{base_url}/feedback/client/{token}"
         
         # Send email to client

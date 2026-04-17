@@ -5,6 +5,22 @@ import { getApiBaseUrl } from "@/lib/runtimeConfig";
 
 const API_BASE_URL = getApiBaseUrl();
 
+const parseApiError = async (response: Response, fallback: string) => {
+  try {
+    const error = await response.json();
+    if (typeof error?.detail === 'string') return error.detail;
+    if (Array.isArray(error?.detail)) {
+      return error.detail
+        .map((d: any) => d?.msg || d?.message || JSON.stringify(d))
+        .join(', ');
+    }
+    if (typeof error?.message === 'string') return error.message;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 // Get auth headers from localStorage
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -144,30 +160,52 @@ export const deleteEmployee = async (id: string): Promise<void> => {
 
 // Task Management
 export const addTask = async (employeeId: string, taskData: Record<string, unknown>): Promise<Employee> => {
+  const formData = new FormData();
+  Object.entries(taskData).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+    formData.append(key, String(value));
+  });
+
   const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks`, {
     method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(taskData),
+    headers: {
+      Authorization: getAuthHeaders().Authorization,
+    },
+    body: formData,
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to add task');
+    throw new Error(await parseApiError(response, 'Failed to add task'));
   }
 
   return response.json();
 };
 
 export const updateTask = async (employeeId: string, taskId: string, taskData: Record<string, unknown>): Promise<Employee> => {
+  const formData = new FormData();
+  Object.entries(taskData).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+    formData.append(key, String(value));
+  });
+
   const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks/${taskId}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(taskData),
+    headers: {
+      Authorization: getAuthHeaders().Authorization,
+    },
+    body: formData,
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to update task');
+    throw new Error(await parseApiError(response, 'Failed to update task'));
   }
 
   return response.json();
@@ -316,8 +354,7 @@ export const addMilestone = async (employeeId: string, milestoneData: Record<str
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to add milestone');
+    throw new Error(await parseApiError(response, 'Failed to add milestone'));
   }
   return response.json();
 };
@@ -342,14 +379,7 @@ export const updateMilestone = async (
   });
 
   if (!response.ok) {
-    let errorText = await response.text();
-    let error;
-    try {
-      error = JSON.parse(errorText);
-    } catch {
-      error = errorText;
-    }
-    throw new Error(typeof error === 'object' && error.detail ? error.detail : JSON.stringify(error));
+    throw new Error(await parseApiError(response, 'Failed to update milestone'));
   }
   return response.json();
 };
