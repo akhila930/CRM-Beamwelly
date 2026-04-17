@@ -24,7 +24,7 @@ export function DashboardStats() {
         setLoading(true);
         setError(null);
         console.log("Fetching dashboard stats...");
-        const response = await api.get('/analytics/dashboard-stats');
+        const response = await api.get('/api/analytics/dashboard-stats');
         console.log("Dashboard stats response:", response.data);
         setStats(response.data);
       } catch (err: any) {

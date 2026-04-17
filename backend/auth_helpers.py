@@ -112,6 +112,7 @@ def send_employee_credentials_email(
     password: str,
     background_tasks: BackgroundTasks
 ):
+    frontend_url = (os.getenv("FRONTEND_URL") or "http://localhost:8080").rstrip("/")
     subject = "Your Employee Account Credentials"
     message = f"""
     Dear {name},
@@ -121,7 +122,7 @@ def send_employee_credentials_email(
     Email: {email}
     Password: {password}
 
-    Please login at https://preview--bw-crm.lovable.app/ .
+    Please login at {frontend_url}/auth .
 
     Best regards,
     Admin Team

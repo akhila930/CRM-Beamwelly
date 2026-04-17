@@ -226,8 +226,27 @@ export default function Recruitment() {
                     <CandidateList filter={searchQuery} stage="all" refreshList={refreshList} />
                   </TabsContent>
                   <TabsContent value="pipeline">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {/* Pipeline stages will be implemented here */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Applied</h3>
+                        <CandidateList filter={searchQuery} stage="applied" refreshList={refreshList} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Screening</h3>
+                        <CandidateList filter={searchQuery} stage="screening" refreshList={refreshList} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Interview</h3>
+                        <CandidateList filter={searchQuery} stage="interview" refreshList={refreshList} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Offer</h3>
+                        <CandidateList filter={searchQuery} stage="offer" refreshList={refreshList} />
+                      </div>
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Hired</h3>
+                        <CandidateList filter={searchQuery} stage="hired" refreshList={refreshList} />
+                      </div>
                     </div>
                   </TabsContent>
                 </Tabs>

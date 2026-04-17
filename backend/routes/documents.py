@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Optional
 import os
 import shutil
@@ -75,7 +75,14 @@ async def get_folders(
     
     # Add document count to each folder
     for folder in folders:
-        folder.document_count = db.query(func.count(Document.id)).filter(Document.folder_id == folder.id).scalar()
+        count_query = db.query(func.count(Document.id)).filter(Document.folder_id == folder.id)
+        # Keep counts consistent with document listing filters; include legacy rows
+        # where company_name may be NULL.
+        if current_user.company_name:
+            count_query = count_query.filter(
+                or_(Document.company_name == current_user.company_name, Document.company_name.is_(None))
+            )
+        folder.document_count = count_query.scalar()
     
     return folders
 
@@ -176,7 +183,8 @@ def get_documents(
         
         # Filter by company name for users with a company
         if current_user.company_name:
-            query = query.filter(Document.company_name == current_user.company_name)
+            # Include legacy documents where company_name is NULL but belong to the folder's company.
+            query = query.filter(or_(Document.company_name == current_user.company_name, Document.company_name.is_(None)))
             
         documents = query.all()
         return documents
@@ -203,7 +211,9 @@ def get_all_documents(current_user: User = Depends(get_current_user), db: Sessio
                 
             document_query = db.query(Document).filter(Document.folder_id == folder.id)
             if current_user.company_name:
-                document_query = document_query.filter(Document.company_name == current_user.company_name)
+                document_query = document_query.filter(
+                    or_(Document.company_name == current_user.company_name, Document.company_name.is_(None))
+                )
             documents = document_query.all()
             all_documents.extend(documents)
             

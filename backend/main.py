@@ -75,6 +75,12 @@ def _get_cors_origins() -> list[str]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_get_cors_origins(),
+    # If you deploy a differently-named Render frontend (or a custom domain),
+    # this keeps CORS working without code changes.
+    allow_origin_regex=os.getenv(
+        "CORS_ORIGIN_REGEX",
+        r"^https?://(localhost(:\d+)?|crm-beamwelly-\d+\.onrender\.com|crm-beamwelly-3\.onrender\.com|([a-z0-9-]+\.)*equitywala\.com)$",
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -138,7 +144,7 @@ app.include_router(leads.router)
 app.include_router(tasks.router)
 app.include_router(lead_client.router)
 app.include_router(productivity.router)
-app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(salary.router, prefix="/api/salary", tags=["salary"])
 app.include_router(dashboard.router)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])

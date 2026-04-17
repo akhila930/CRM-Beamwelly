@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart, FileDown, FileSpreadsheet, Settings } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart as ReBarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import axios from 'axios';
+import api from "@/lib/axios";
 
 interface ChartData {
   name: string;
@@ -30,8 +30,8 @@ export function ReportBuilder() {
       try {
         setLoading(true);
         const [chartResponse, pieResponse] = await Promise.all([
-          axios.get(`/api/analytics/report?module=${module}&type=chart`),
-          axios.get(`/api/analytics/report?module=${module}&type=pie`)
+          api.get(`/api/analytics/report?module=${module}&type=chart`),
+          api.get(`/api/analytics/report?module=${module}&type=pie`)
         ]);
         setData(chartResponse.data);
         setPieData(pieResponse.data);

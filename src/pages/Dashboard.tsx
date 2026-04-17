@@ -27,6 +27,7 @@ import {
 import { useFadeIn, useSequentialFadeIn } from "@/lib/animations";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/lib/axios";
+import { Link } from "react-router-dom";
 
 interface DashboardStats {
   totalEmployees: number;
@@ -267,9 +268,9 @@ export default function Dashboard() {
                       {module.icon}
                     </div>
                     <Button variant="ghost" size="icon" asChild>
-                      <a href={module.link}>
+                      <Link to={module.link}>
                         <ArrowUpRight className="h-4 w-4" />
-                      </a>
+                      </Link>
                     </Button>
                   </div>
                   <CardTitle className="text-base mt-2">{module.title}</CardTitle>

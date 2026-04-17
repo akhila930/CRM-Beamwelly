@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional, Any
 from database import get_db
@@ -18,6 +18,7 @@ from models import MilestoneStatus
 from fastapi.responses import FileResponse
 from pathlib import Path
 from models import DocumentType
+from auth_helpers import get_password_hash, generate_password, send_employee_credentials_email
 
 router = APIRouter(prefix="/api/employees", tags=["employees"])
 
@@ -361,7 +362,8 @@ async def update_employee(
 def create_employee(
     employee: EmployeeCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
 ):
     if current_user.role != "admin":
         raise HTTPException(
@@ -401,15 +403,44 @@ def create_employee(
                             detail="Invalid salary format"
                         )
         
-        # Set default values for optional fields
+        # Create linked User account first (Employee.user_id is NOT NULL)
+        temp_password = generate_password()
+        db_user = User(
+            name=employee.name,
+            email=str(employee.email),
+            hashed_password=get_password_hash(temp_password),
+            role="employee",
+            is_active=True,
+            # Admin-created employees should be able to login immediately.
+            is_verified=True,
+            company_name=current_user.company_name,
+        )
+        db.add(db_user)
+        db.flush()  # assign db_user.id without committing yet
+
+        # Set default values for optional fields and link to created user
         employee_data = employee.model_dump()
         employee_data["company_name"] = current_user.company_name
-        
+        employee_data["user_id"] = db_user.id
+
         # Create new employee
         db_employee = Employee(**employee_data)
         db.add(db_employee)
         db.commit()
         db.refresh(db_employee)
+
+        # Send credentials email if background_tasks is available/configured
+        if background_tasks is not None:
+            try:
+                send_employee_credentials_email(
+                    email=db_user.email,
+                    name=db_user.name,
+                    password=temp_password,
+                    background_tasks=background_tasks,
+                )
+            except Exception:
+                # Don't fail employee creation if email fails
+                pass
         
         return db_employee
         

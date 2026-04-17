@@ -407,6 +407,12 @@ export function CampaignTracker() {
     );
   };
 
+  const normalizedFilter = (filter || "all").toLowerCase();
+  const filteredCampaigns = campaigns.filter((c) => {
+    if (normalizedFilter === "all") return true;
+    return String(c.status || "").toLowerCase() === normalizedFilter;
+  });
+
   return (
     <div className="space-y-6">
       {renderStats()}
@@ -444,7 +450,7 @@ export function CampaignTracker() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {campaigns.map((campaign) => (
+            {filteredCampaigns.map((campaign) => (
               <TableRow key={campaign.id}>
                 <TableCell className="font-medium">{campaign.name}</TableCell>
                 <TableCell>{campaign.platforms.join(", ")}</TableCell>
@@ -453,12 +459,12 @@ export function CampaignTracker() {
                 <TableCell>{campaign.roi.toFixed(2)}%</TableCell>
                 <TableCell>
                   <span className={`capitalize ${
-                    campaign.status === "active" ? "text-green-600" :
-                    campaign.status === "completed" ? "text-blue-600" :
-                    campaign.status === "cancelled" ? "text-red-600" :
+                    String(campaign.status).toLowerCase() === "active" ? "text-green-600" :
+                    String(campaign.status).toLowerCase() === "completed" ? "text-blue-600" :
+                    String(campaign.status).toLowerCase() === "cancelled" ? "text-red-600" :
                     "text-yellow-600"
                   }`}>
-                    {campaign.status}
+                    {String(campaign.status).toLowerCase()}
                   </span>
                 </TableCell>
                 <TableCell>

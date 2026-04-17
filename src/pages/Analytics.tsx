@@ -19,7 +19,7 @@ export default function Analytics() {
       toast.info("Preparing export data...");
 
       // Fetch dashboard stats
-      const response = await api.get('/analytics/dashboard-stats');
+      const response = await api.get('/api/analytics/dashboard-stats');
       
       if (!response.data) {
         throw new Error("Failed to fetch data for export");

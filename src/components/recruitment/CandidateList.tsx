@@ -40,9 +40,10 @@ interface Candidate {
 interface CandidateListProps {
   filter: string;
   stage: CandidateStage;
+  refreshList?: boolean;
 }
 
-export const CandidateList = ({ filter, stage }: CandidateListProps) => {
+export const CandidateList = ({ filter, stage, refreshList }: CandidateListProps) => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +107,22 @@ export const CandidateList = ({ filter, stage }: CandidateListProps) => {
     };
 
     fetchCandidates();
-  }, []);
+  }, [refreshList]);
+
+  const updateCandidateStage = async (candidateId: number, nextStage: Exclude<CandidateStage, "all">) => {
+    try {
+      await api.put(`/api/recruitment/candidates/${candidateId}`, { stage: nextStage });
+      // Update local list optimistically
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, stage: nextStage } : c))
+      );
+      toast.success(`Stage updated to ${nextStage}`);
+    } catch (error: any) {
+      console.error("Error updating candidate stage:", error);
+      const msg = error?.response?.data?.detail || error?.message || "Failed to update stage";
+      toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    }
+  };
 
   const getStageBadgeColor = (stage: string) => {
     switch (stage.toLowerCase()) {
@@ -359,10 +375,20 @@ export const CandidateList = ({ filter, stage }: CandidateListProps) => {
                   <DropdownMenuItem onClick={() => openEmailDialog(candidate)}>
                     Send Email
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a href={`/recruitment/candidates/${candidate.id}/edit`}>
-                      Update Stage
-                    </a>
+                  <DropdownMenuItem onClick={() => updateCandidateStage(candidate.id, "applied")}>
+                    Set Stage: Applied
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateCandidateStage(candidate.id, "screening")}>
+                    Set Stage: Screening
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateCandidateStage(candidate.id, "interview")}>
+                    Set Stage: Interview
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateCandidateStage(candidate.id, "offer")}>
+                    Set Stage: Offer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => updateCandidateStage(candidate.id, "hired")}>
+                    Set Stage: Hired
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     className="text-red-600"

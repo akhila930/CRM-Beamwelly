@@ -1,8 +1,5 @@
-'use client';
-
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import api from '@/lib/axios';
 import { DocumentLibrary } from '@/components/documents/DocumentLibrary';
 import { Loader2 } from 'lucide-react';
 import { Header } from "@/components/layout/Header";

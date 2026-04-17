@@ -24,7 +24,7 @@ export function ModuleOverview({ module, title }: ModuleOverviewProps) {
         setLoading(true);
         setError(null);
         console.log(`Fetching data for module: ${module}`);
-        const response = await api.get(`/analytics/module-overview/${module}`);
+        const response = await api.get(`/api/analytics/module-overview/${module}`);
         console.log(`Received response:`, response.data);
         
         if (response.data && Array.isArray(response.data.data)) {

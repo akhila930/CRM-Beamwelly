@@ -155,11 +155,17 @@ def list_tasks(
         # Admin sees all tasks in their company
         tasks = db.query(Task).filter(Task.company_name == current_user.company_name).offset(skip).limit(limit).all()
     else:
+        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee_id = employee.id if employee else None
         # Regular users see tasks assigned to them or created by them in their company
-        tasks = db.query(Task).filter(
-            (Task.company_name == current_user.company_name) &
-            ((Task.assigned_to == current_user.id) | (Task.assigned_by == current_user.id))
-        ).offset(skip).limit(limit).all()
+        base_query = db.query(Task).filter(Task.company_name == current_user.company_name)
+        if employee_id is None:
+            base_query = base_query.filter(Task.assigned_by == current_user.id)
+        else:
+            base_query = base_query.filter(
+                (Task.assigned_to == employee_id) | (Task.assigned_by == current_user.id)
+            )
+        tasks = base_query.offset(skip).limit(limit).all()
     return tasks
 
 @router.get("/assigned", response_model=List[TaskSchema])
@@ -170,8 +176,11 @@ def list_assigned_tasks(
     db: Session = Depends(get_db)
 ):
     """List tasks assigned to the current user in their company"""
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        return []
     tasks = db.query(Task).filter(
-        Task.assigned_to == current_user.id,
+        Task.assigned_to == employee.id,
         Task.company_name == current_user.company_name
     ).offset(skip).limit(limit).all()
     return tasks
@@ -199,8 +208,15 @@ async def get_user_productivity_metrics(
     try:
         now = datetime.utcnow()
 
-        # Filter tasks by assigned_to the current user
-        user_tasks_query = db.query(Task).filter(Task.assigned_to == current_user.id)
+        employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        employee_id = employee.id if employee else None
+
+        # Task.assigned_to points to Employee.id (not User.id)
+        user_tasks_query = db.query(Task)
+        if employee_id is None:
+            user_tasks_query = user_tasks_query.filter(Task.assigned_by == current_user.id)
+        else:
+            user_tasks_query = user_tasks_query.filter(Task.assigned_to == employee_id)
         
         # Add logging to see the user ID and query counts
         print(f"Fetching productivity metrics for user ID: {current_user.id}")
@@ -282,9 +298,14 @@ def get_productivity_chart(
         
         # If not admin, only show tasks assigned to or created by the user
         if current_user.role != "admin":
-            tasks_query = tasks_query.filter(
-                (Task.assigned_to == current_user.id) | (Task.assigned_by == current_user.id)
-            )
+            employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+            employee_id = employee.id if employee else None
+            if employee_id is None:
+                tasks_query = tasks_query.filter(Task.assigned_by == current_user.id)
+            else:
+                tasks_query = tasks_query.filter(
+                    (Task.assigned_to == employee_id) | (Task.assigned_by == current_user.id)
+                )
         
         tasks = tasks_query.all()
         
