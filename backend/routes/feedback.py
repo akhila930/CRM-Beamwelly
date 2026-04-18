@@ -24,13 +24,21 @@ router = APIRouter(
 
 
 def _resolve_feedback_form_base_url() -> str:
+    def _sanitize(url: str) -> str:
+        cleaned = url.strip().rstrip("/")
+        if cleaned.endswith("/index.html"):
+            cleaned = cleaned[: -len("/index.html")]
+        elif cleaned.endswith("index.html"):
+            cleaned = cleaned[: -len("index.html")].rstrip("/")
+        return cleaned
+
     explicit = (os.getenv("FEEDBACK_FORM_BASE_URL") or "").strip()
     if explicit:
-        return explicit.rstrip("/")
+        return _sanitize(explicit)
 
     frontend = (os.getenv("FRONTEND_URL") or "").strip()
     if frontend:
-        return frontend.rstrip("/")
+        return _sanitize(frontend)
 
     return "https://crm-beamwelly-3.onrender.com"
 

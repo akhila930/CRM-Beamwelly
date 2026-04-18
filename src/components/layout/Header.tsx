@@ -85,9 +85,17 @@ export function Header({ title = "Dashboard" }: HeaderProps) {
   };
 
   const handleProfileUpdate = async () => {
-    if (!editableUser) return;
+    if (!editableUser || !user) return;
     try {
-      const response = await api.put('/api/auth/me', editableUser);
+      // Avoid sending restricted fields for non-admin users; backend rejects role/company updates with 403.
+      const payload: any = {
+        name: editableUser.name,
+      };
+      if (user.role === "admin") {
+        payload.company_name = editableUser.company_name;
+      }
+
+      const response = await api.put('/api/auth/me', payload);
       setUser(response.data);
       toast({
         title: 'Profile Updated',

@@ -490,7 +490,6 @@ async def delete_employee(
 @router.post("/{employee_id}/tasks", response_model=EmployeeResponse)
 async def add_task(
     employee_id: int,
-    document: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     request: Request = None
@@ -511,6 +510,7 @@ async def add_task(
         status: Optional[str] = None
         tags: Optional[Any] = None
         comments: Optional[str] = None
+        document: Optional[UploadFile] = None
 
         if request is not None:
             content_type = (request.headers.get("content-type") or "").lower()
@@ -536,6 +536,9 @@ async def add_task(
             status = form.get("status") or form.get("task_status")
             tags = form.get("tags")
             comments = form.get("comments")
+            maybe_document = form.get("document")
+            if isinstance(maybe_document, UploadFile):
+                document = maybe_document
 
         # Validate required values
         if not title or not due_date or not priority or not status:
@@ -618,7 +621,6 @@ async def add_task(
 async def update_task(
     employee_id: int,
     task_id: int,
-    document: UploadFile = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     request: Request = None
@@ -648,6 +650,7 @@ async def update_task(
         status: Optional[str] = None
         tags: Optional[Any] = None
         comments: Optional[str] = None
+        document: Optional[UploadFile] = None
 
         if request is not None:
             content_type = (request.headers.get("content-type") or "").lower()
@@ -672,6 +675,9 @@ async def update_task(
             status = form.get("status") or form.get("task_status")
             tags = form.get("tags")
             comments = form.get("comments")
+            maybe_document = form.get("document")
+            if isinstance(maybe_document, UploadFile):
+                document = maybe_document
 
         # Normalize due_date if provided as YYYY-MM-DD
         if isinstance(due_date, str) and due_date:
