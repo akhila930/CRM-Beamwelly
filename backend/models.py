@@ -49,7 +49,7 @@ class Task(Base):
     completed_at = Column(DateTime, nullable=True)
     tags = Column(ARRAY(String), nullable=True)
     comments = Column(Text, nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     document_url = Column(String, nullable=True)  # New field for uploaded document
 
     # Relationships
@@ -70,7 +70,7 @@ class Employee(Base):
     hire_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default="active")
     address = Column(String, nullable=True)
-    company_name = Column(String, nullable=True)
+    company_name = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     can_assign_tasks = Column(Boolean, default=False)
@@ -97,7 +97,7 @@ class Candidate(Base):
     stage = Column(String, nullable=False)
     status = Column(String, nullable=False)
     notes = Column(Text, nullable=True)  # Add notes field
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     created_by_user_id = Column(Integer, ForeignKey('users.id')) # Add foreign key
@@ -134,7 +134,7 @@ class Document(Base):
     folder_id = Column(Integer, ForeignKey("document_folders.id"))
     employee_id = Column(Integer, ForeignKey("employees.id", ondelete="CASCADE"), nullable=True)
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -207,7 +207,7 @@ class Budget(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default="active")
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -223,7 +223,7 @@ class DepartmentBudget(Base):
     department = Column(String, nullable=False)  # 'hr', 'marketing', 'operations', 'sales', 'it'
     allocated_amount = Column(Numeric(10, 2), nullable=False)
     spent_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -267,7 +267,7 @@ class SocialMediaCampaign(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     status = Column(String, nullable=False, default="PLANNED")
-    company_name = Column(String, nullable=True)
+    company_name = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     posts = relationship("ScheduledPost", back_populates="campaign", cascade="all, delete-orphan")
@@ -299,7 +299,7 @@ class ScheduledPost(Base):
     target_audience = Column(JSON, nullable=True, default={})
     status = Column(String, nullable=False, default="SCHEDULED")
     performance_metrics = Column(JSON, default={}, nullable=False)
-    company_name = Column(String, nullable=True)
+    company_name = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     campaign = relationship("SocialMediaCampaign", back_populates="posts")
@@ -312,7 +312,7 @@ class DocumentFolder(Base):
     description = Column(String, nullable=True)
     is_confidential = Column(Boolean, default=False)
     access_key = Column(String(100), nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id"))
 
@@ -332,7 +332,7 @@ class EmployeeFeedback(Base):
     feedback = Column(Text, nullable=False)
     rating = Column(Integer, nullable=False)  # 1-5 rating
     remarks = Column(Text, nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -351,7 +351,7 @@ class ClientFeedback(Base):
     form_token = Column(String, unique=True, nullable=True)
     form_expires_at = Column(DateTime, nullable=True)
     is_submitted = Column(Boolean, default=False)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -380,7 +380,7 @@ class LeaveRequest(Base):
     status = Column(Enum(LeaveStatus), default=LeaveStatus.PENDING)
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     rejection_reason = Column(Text, nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -397,7 +397,7 @@ class LeaveBalance(Base):
     casual_leave = Column(Integer, default=12)  # Default 12 days per year
     sick_leave = Column(Integer, default=15)    # Default 15 days per year
     annual_leave = Column(Integer, default=20)  # Default 20 days per year
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -454,7 +454,7 @@ class Lead(Base):
     expected_value = Column(Float, nullable=True)
     assigned_to = Column(Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
     client_id = Column(Integer, ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
-    managing_company_name = Column(String, nullable=False) # Company managing this lead for access control
+    managing_company_name = Column(String, nullable=False, index=True) # Company managing this lead for access control
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -472,7 +472,7 @@ class Expense(Base):
     date = Column(Date, nullable=False)
     description = Column(String, nullable=True)
     receipt_url = Column(String, nullable=True)
-    company_name = Column(String, nullable=True)  # Add company_name field
+    company_name = Column(String, nullable=True, index=True)  # Add company_name field
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -529,7 +529,7 @@ class Client(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     mobile_number = Column(String, nullable=True)
-    managing_company_name = Column(String, nullable=True) # Company managing this client for access control
+    managing_company_name = Column(String, nullable=True, index=True) # Company managing this client for access control
     client_employer_company_name = Column(String, nullable=True) # The actual employer company of the client
     profession = Column(String, nullable=True)
     qualification = Column(String, nullable=True)
@@ -561,7 +561,7 @@ class Service(Base):
     name = Column(String, index=True)
     description = Column(String, nullable=True)
     stage = Column(String, default="active")
-    managing_company_name = Column(String, nullable=True) # New field for company-based access
+    managing_company_name = Column(String, nullable=True, index=True) # New field for company-based access
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -593,7 +593,7 @@ class CompanyLeavePolicy(Base):
     __tablename__ = "company_leave_policies"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_name = Column(String, ForeignKey("companies.name"), nullable=False) # Changed to ForeignKey and nullable=False
+    company_name = Column(String, ForeignKey("companies.name"), nullable=False, index=True) # Changed to ForeignKey and nullable=False
     annual_leave_count = Column(Integer, nullable=False, default=20)
     sick_leave_count = Column(Integer, nullable=False, default=15)
     casual_leave_count = Column(Integer, nullable=False, default=12)

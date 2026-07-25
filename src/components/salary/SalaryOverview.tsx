@@ -41,7 +41,7 @@ export function SalaryOverview({ selectedMonth }: SalaryOverviewProps) {
         const net = emp.salary + earnings - deductions;
         payroll += net;
         // Determine payment status for this employee for the selected month
-        const isProcessed = processedPaymentsData[selectedMonth] && monthlyComponents[selectedMonth] && monthlyComponents[selectedMonth][emp.id];
+        const isProcessed = !!processedPaymentsData[selectedMonth];
         if (isProcessed) {
           processed += 1;
         } else {

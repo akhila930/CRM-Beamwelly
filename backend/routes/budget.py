@@ -716,11 +716,16 @@ async def create_expense(
 @router.put("/expenses/{expense_id}", response_model=ExpenseOut)
 async def update_expense(
     expense_id: int,
-    expense_data: dict,
+    type: str = Form(...),
+    amount: float = Form(...),
+    department: str = Form(...),
+    date: str = Form(...),
+    description: str = Form(...),
+    receipt: UploadFile = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update an existing expense"""
+    """Update an existing expense with optional receipt upload"""
     try:
         expense = db.query(Expense).filter(Expense.id == expense_id).first()
         if not expense:
@@ -729,41 +734,82 @@ async def update_expense(
                 detail="Expense not found"
             )
 
+        # Handle receipt upload if provided
+        receipt_url = expense.receipt_url
+        if receipt and receipt.filename:
+            # Validate file type
+            if not receipt.filename.lower().endswith('.pdf'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only PDF files are allowed"
+                )
+
+            # Save the new receipt
+            try:
+                upload_dir = "uploads/receipts"
+                os.makedirs(upload_dir, exist_ok=True)
+                unique_filename = f"{uuid.uuid4()}.pdf"
+                file_path = os.path.join(upload_dir, unique_filename)
+                
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(receipt.file, buffer)
+                
+                # Delete the old receipt file if it exists
+                if expense.receipt_url:
+                    old_path = os.path.join(".", expense.receipt_url.lstrip("/"))
+                    try:
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                    except Exception as e:
+                        print(f"Error removing old receipt: {e}")
+
+                receipt_url = f"/uploads/receipts/{unique_filename}"
+            except Exception as e:
+                print(f"Error saving receipt: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Error saving receipt file"
+                )
+
         # If department changed, update department budgets
-        if 'department' in expense_data and expense_data['department'] != expense.department:
+        if department != expense.department:
             # Remove amount from old department
             old_dept = db.query(DepartmentBudget).filter(
-                DepartmentBudget.department == expense.department
+                DepartmentBudget.department == expense.department,
+                DepartmentBudget.company_name == current_user.company_name
             ).first()
             if old_dept:
                 old_dept.spent_amount -= Decimal(str(expense.amount))
 
             # Add amount to new department
             new_dept = db.query(DepartmentBudget).filter(
-                DepartmentBudget.department == expense_data['department']
+                DepartmentBudget.department == department,
+                DepartmentBudget.company_name == current_user.company_name
             ).first()
             if not new_dept:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Department {expense_data['department']} not found"
+                    detail=f"Department {department} not found"
                 )
             new_dept.spent_amount += Decimal(str(expense.amount))
 
         # If amount changed, update department budget
-        if 'amount' in expense_data and expense_data['amount'] != float(expense.amount):
+        if amount != float(expense.amount):
             dept = db.query(DepartmentBudget).filter(
-                DepartmentBudget.department == expense.department
+                DepartmentBudget.department == (department if department != expense.department else expense.department),
+                DepartmentBudget.company_name == current_user.company_name
             ).first()
             if dept:
                 # Remove old amount and add new amount
-                dept.spent_amount = dept.spent_amount - Decimal(str(expense.amount)) + Decimal(str(expense_data['amount']))
+                dept.spent_amount = dept.spent_amount - Decimal(str(expense.amount)) + Decimal(str(amount))
 
         # Update expense fields
-        for key, value in expense_data.items():
-            if hasattr(expense, key):
-                if key == 'date':
-                    value = datetime.strptime(value, "%Y-%m-%d").date()
-                setattr(expense, key, value)
+        expense.type = type
+        expense.amount = amount
+        expense.department = department
+        expense.date = datetime.strptime(date, "%Y-%m-%d").date()
+        expense.description = description
+        expense.receipt_url = receipt_url
 
         db.commit()
         db.refresh(expense)

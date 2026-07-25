@@ -389,30 +389,24 @@ async def get_stats(
 ):
     """Get recruitment statistics"""
     try:
-        # Start with the base query for candidates
-        query = db.query(Candidate)
+        # Use conditional aggregation to fetch all stats in a single database query
+        from sqlalchemy import case
+        stats_query = db.query(
+            func.count(Candidate.id).label("total"),
+            func.sum(case((Candidate.stage.in_(["screening", "interview", "offer"]), 1), else_=0)).label("active"),
+            func.sum(case((Candidate.stage == "hired", 1), else_=0)).label("hired"),
+            func.sum(case((Candidate.stage == "applied", 1), else_=0)).label("applied")
+        )
 
-        # Filter by company name for users associated with a company
         if current_user.company_name:
-            query = query.filter(Candidate.company_name == current_user.company_name)
+            stats_query = stats_query.filter(Candidate.company_name == current_user.company_name)
 
-        # Get total candidates
-        total_candidates = query.count() # Use count() on the filtered query
-
-        # Get active candidates (in screening, interview, or offer stages)
-        active_candidates = query.filter(
-            Candidate.stage.in_(["screening", "interview", "offer"])
-        ).count() # Use count() on the filtered query
-
-        # Get hired candidates
-        hired_candidates = query.filter(
-            Candidate.stage == "hired"
-        ).count() # Use count() on the filtered query
-
-        # Get applied candidates
-        applied_candidates = query.filter(
-            Candidate.stage == "applied"
-        ).count() # Use count() on the filtered query
+        result = stats_query.first()
+        
+        total_candidates = result.total or 0
+        active_candidates = int(result.active or 0)
+        hired_candidates = int(result.hired or 0)
+        applied_candidates = int(result.applied or 0)
 
         return {
             "total_candidates": total_candidates,

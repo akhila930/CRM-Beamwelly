@@ -60,6 +60,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+from fastapi.exceptions import RequestValidationError
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    import logging
+    logging.error(f"Validation error: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
 def _get_cors_origins() -> list[str]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
     if raw:
@@ -99,6 +109,36 @@ EMAIL_FROM = EMAIL_HOST_USER
 
 # Create tables
 ModelBase.metadata.create_all(bind=engine)
+
+# Create indexes for multi-tenant company columns if they don't exist
+def create_indexes_if_not_exist():
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        indexes = [
+            ("idx_employees_company_name", "employees", "company_name"),
+            ("idx_candidates_company_name", "candidates", "company_name"),
+            ("idx_tasks_company_name", "tasks", "company_name"),
+            ("idx_documents_company_name", "documents", "company_name"),
+            ("idx_document_folders_company_name", "document_folders", "company_name"),
+            ("idx_leave_requests_company_name", "leave_requests", "company_name"),
+            ("idx_leave_balances_company_name", "leave_balances", "company_name"),
+            ("idx_leads_managing_company_name", "leads", "managing_company_name"),
+            ("idx_clients_managing_company_name", "clients", "managing_company_name"),
+            ("idx_services_managing_company_name", "services", "managing_company_name"),
+            ("idx_company_leave_policies_company_name", "company_leave_policies", "company_name"),
+        ]
+        for idx_name, table_name, col_name in indexes:
+            try:
+                db.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ({col_name})"))
+                db.commit()
+            except Exception as ex:
+                db.rollback()
+                print(f"WARNING: Could not create index {idx_name} on {table_name}: {ex}")
+    finally:
+        db.close()
+
+create_indexes_if_not_exist()
 
 
 # Create uploads directory if it doesn't exist

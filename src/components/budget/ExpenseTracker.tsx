@@ -211,9 +211,13 @@ export function ExpenseTracker() {
     }
   };
 
-  const handleEditExpense = async (id: number, updatedData: Partial<Expense>) => {
+  const handleEditExpense = async (id: number, formData: FormData) => {
     try {
-      const response = await api.put(`/api/budget/expenses/${id}`, updatedData);
+      const response = await api.put(`/api/budget/expenses/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       setExpenses(expenses.map(expense => 
         expense.id === id ? response.data : expense
       ));

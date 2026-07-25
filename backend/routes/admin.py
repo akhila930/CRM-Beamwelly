@@ -112,25 +112,47 @@ async def upload_company_logo(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only administrators can upload company logos")
 
-    # Define upload directory and create if it doesn't exist
-    upload_base = Path(os.getenv("UPLOAD_DIR", "uploads"))
-    upload_dir = upload_base / "logos"
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # Read file content
+    contents = await file.read()
 
     # Generate a unique filename
     file_extension = os.path.splitext(file.filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = upload_dir / unique_filename
 
-    # Save the uploaded file
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error saving file: {e}")
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+
+    logo_url = None
+
+    if supabase_url and supabase_key:
+        # Try uploading to Supabase Storage
+        from utils.supabase_storage import upload_logo_to_supabase
+        logo_url = upload_logo_to_supabase(
+            file_content=contents,
+            filename=unique_filename,
+            content_type=file.content_type or "image/png"
+        )
+        if not logo_url:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to upload company logo to Supabase Storage. Check backend logs for details."
+            )
+    else:
+        # Fallback to local storage if Supabase is not configured
+        upload_base = Path(os.getenv("UPLOAD_DIR", "uploads"))
+        upload_dir = upload_base / "logos"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path = upload_dir / unique_filename
+
+        try:
+            with open(file_path, "wb") as buffer:
+                buffer.write(contents)
+            logo_url = f"/uploads/logos/{unique_filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error saving file locally: {e}")
 
     # Update the admin user's logo_url in the database
-    current_user.logo_url = f"/uploads/logos/{unique_filename}"  # Served by /uploads mount
+    current_user.logo_url = logo_url
     db.commit()
     db.refresh(current_user)
 

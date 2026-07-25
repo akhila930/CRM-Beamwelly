@@ -21,34 +21,63 @@ const parseApiError = async (response: Response, fallback: string) => {
   }
 };
 
-// Get auth headers from localStorage
-const getAuthHeaders = () => {
+// Smart authenticated fetch wrapper
+const authenticatedFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
   const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
+  const headers: Record<string, string> = {
     Authorization: token ? `Bearer ${token}` : '',
+    ...(options.headers as Record<string, string> || {}),
   };
+  
+  // Only add Content-Type: application/json if body is present and not FormData
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  const response = await fetch(url, { ...options, headers });
+  if (response.status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/auth';
+    throw new Error('Unauthorized');
+  }
+  return response;
+};
+
+let employeesCache: Employee[] | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 3000; // 3 seconds
+
+export const clearEmployeesCache = () => {
+  employeesCache = null;
+  cacheTimestamp = 0;
 };
 
 // Get all employees
 export const getAllEmployees = async (): Promise<Employee[]> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/`, {
-    headers: getAuthHeaders(),
-  });
+  const now = Date.now();
+  if (employeesCache && (now - cacheTimestamp < CACHE_TTL)) {
+    return employeesCache;
+  }
+
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/`);
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Failed to fetch employees');
   }
 
-  return response.json();
+  const data = await response.json();
+  employeesCache = data;
+  cacheTimestamp = Date.now();
+  return data;
 };
 
 // Create new employee (using admin endpoint)
 export const createEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/admin/create-employee`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/admin/create-employee`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(employeeData),
   });
 
@@ -60,8 +89,6 @@ export const createEmployee = async (employeeData: Omit<Employee, 'id'>): Promis
   // If successful, fetch the newly created employee
   const result = await response.json();
   
-  // Return a dummy employee object with the new ID for optimistic UI updates
-  // The actual data will be fetched when the component reloads
   return {
     id: result.employee_id.toString(),
     name: employeeData.name,
@@ -84,9 +111,7 @@ export const createEmployee = async (employeeData: Omit<Employee, 'id'>): Promis
 
 // Get employee by ID
 export const getEmployeeById = async (id: string): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${id}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -98,10 +123,7 @@ export const getEmployeeById = async (id: string): Promise<Employee> => {
 
 // Get employee by email
 export const getEmployeeByEmail = async (email: string): Promise<Employee> => {
-  // First get all employees
-  const response = await fetch(`${API_BASE_URL}/api/employees/`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -120,22 +142,20 @@ export const getEmployeeByEmail = async (email: string): Promise<Employee> => {
 
 // Update employee
 export const updateEmployee = async (id: string, data: Partial<Employee>): Promise<Employee> => {
-  // Only send allowed fields and skip undefined/null/empty string
+  clearEmployeesCache();
   const allowedFields = [
     'name', 'email', 'phone', 'position', 'department', 'salary', 'hire_date', 'status', 'address', 'can_assign_tasks', 'can_access_recruitment'
   ];
   const filteredData: Record<string, any> = {};
   for (const key of allowedFields) {
-    // Special handling for boolean fields
     if (key === 'can_assign_tasks' || key === 'can_access_recruitment') {
       filteredData[key] = data[key] === true;
     } else if (data[key] !== undefined && data[key] !== null && data[key] !== "") {
       filteredData[key] = data[key];
     }
   }
-  const response = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(filteredData),
   });
   if (!response.ok) {
@@ -147,9 +167,9 @@ export const updateEmployee = async (id: string, data: Partial<Employee>): Promi
 
 // Delete employee
 export const deleteEmployee = async (id: string): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${id}`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -160,6 +180,7 @@ export const deleteEmployee = async (id: string): Promise<void> => {
 
 // Task Management
 export const addTask = async (employeeId: string, taskData: Record<string, unknown>): Promise<Employee> => {
+  clearEmployeesCache();
   const formData = new FormData();
   Object.entries(taskData).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
@@ -170,11 +191,8 @@ export const addTask = async (employeeId: string, taskData: Record<string, unkno
     formData.append(key, String(value));
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks`, {
     method: 'POST',
-    headers: {
-      Authorization: getAuthHeaders().Authorization,
-    },
     body: formData,
   });
 
@@ -186,6 +204,7 @@ export const addTask = async (employeeId: string, taskData: Record<string, unkno
 };
 
 export const updateTask = async (employeeId: string, taskId: string, taskData: Record<string, unknown>): Promise<Employee> => {
+  clearEmployeesCache();
   const formData = new FormData();
   Object.entries(taskData).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
@@ -196,11 +215,8 @@ export const updateTask = async (employeeId: string, taskId: string, taskData: R
     formData.append(key, String(value));
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks/${taskId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks/${taskId}`, {
     method: 'PUT',
-    headers: {
-      Authorization: getAuthHeaders().Authorization,
-    },
     body: formData,
   });
 
@@ -212,9 +228,9 @@ export const updateTask = async (employeeId: string, taskId: string, taskData: R
 };
 
 export const deleteTask = async (employeeId: string, taskId: string): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks/${taskId}`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/tasks/${taskId}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -227,11 +243,9 @@ export const deleteTask = async (employeeId: string, taskId: string): Promise<Em
 
 // Document Management
 export const addDocument = async (employeeId: string, formData: FormData): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/documents`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/documents`, {
     method: 'POST',
-    headers: {
-      Authorization: getAuthHeaders().Authorization,
-    },
     body: formData,
   });
 
@@ -244,9 +258,9 @@ export const addDocument = async (employeeId: string, formData: FormData): Promi
 };
 
 export const deleteDocument = async (employeeId: string, documentId: string): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/documents/${documentId}`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/documents/${documentId}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -259,14 +273,12 @@ export const deleteDocument = async (employeeId: string, documentId: string): Pr
 
 // Excel Import/Export
 export const importEmployeesFromExcel = async (file: File): Promise<void> => {
+  clearEmployeesCache();
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/api/employees/import`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/import`, {
     method: 'POST',
-    headers: {
-      Authorization: getAuthHeaders().Authorization,
-    },
     body: formData,
   });
 
@@ -277,9 +289,7 @@ export const importEmployeesFromExcel = async (file: File): Promise<void> => {
 };
 
 export const exportEmployeesToExcel = async (): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/export`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/export`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -297,9 +307,7 @@ export const exportEmployeesToExcel = async (): Promise<void> => {
 };
 
 export const getExcelTemplate = async (): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/template`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/template`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -322,9 +330,9 @@ export const markAttendance = async (
   date: string,
   status: 'present' | 'absent' | 'halfday'
 ): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/attendance`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/attendance`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify({ date, status }),
   });
 
@@ -338,18 +346,17 @@ export const markAttendance = async (
 
 // Milestone Management
 export const addMilestone = async (employeeId: string, milestoneData: Record<string, unknown>): Promise<Employee> => {
-  // Create a new payload with the correct field names
+  clearEmployeesCache();
   const payload = {
     title: milestoneData.title,
     description: milestoneData.description || '',
-    date: milestoneData.date, // Use correct field
+    date: milestoneData.date,
     status: milestoneData.status,
     created_at: milestoneData.created_at
   };
 
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
 
@@ -364,17 +371,16 @@ export const updateMilestone = async (
   milestoneId: string,
   milestoneData: Record<string, unknown>
 ): Promise<Employee> => {
-  // Only send fields the backend expects
+  clearEmployeesCache();
   const payload = {
     title: milestoneData.title,
     description: milestoneData.description || '',
-    date: milestoneData.date, // Use correct field
+    date: milestoneData.date,
     status: milestoneData.status
   };
 
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones/${milestoneId}`, {
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones/${milestoneId}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
 
@@ -385,9 +391,9 @@ export const updateMilestone = async (
 };
 
 export const deleteMilestone = async (employeeId: string, milestoneId: string): Promise<Employee> => {
-  const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones/${milestoneId}`, {
+  clearEmployeesCache();
+  const response = await authenticatedFetch(`${API_BASE_URL}/api/employees/${employeeId}/milestones/${milestoneId}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -418,4 +424,5 @@ export const employeeService = {
   addMilestone,
   updateMilestone,
   deleteMilestone,
+  clearEmployeesCache,
 };

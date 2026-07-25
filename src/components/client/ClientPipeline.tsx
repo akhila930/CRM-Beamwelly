@@ -44,7 +44,13 @@ export function ClientPipeline() {
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/employees/`);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${getApiBaseUrl()}/api/employees/`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
+      });
       const data = await response.json();
       setEmployees(data);
     } catch (error) {

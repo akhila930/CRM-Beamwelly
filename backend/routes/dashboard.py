@@ -43,20 +43,87 @@ async def get_dashboard_stats(
                 detail="Could not determine company for the current user"
             )
 
-        # Get total employees count for the company
-        total_employees = db.query(func.count(Employee.id)).filter(
-            Employee.company_name == company_name
-        ).scalar() or 0
+        # Get counts in a single database query using subqueries
+        from sqlalchemy import select
 
-        # Get active recruitment count for the company
-        active_recruitment = db.query(func.count(Candidate.id)).filter(
-            Candidate.company_name == company_name,
-            Candidate.status.in_([status.value for status in [
-                CandidateStatus.APPLIED, 
-                CandidateStatus.SCREENING, 
-                CandidateStatus.INTERVIEW
-            ]])
-        ).scalar() or 0
+        month_ago = datetime.now() - timedelta(days=30)
+
+        emp_sub = select(func.count(Employee.id)).where(Employee.company_name == company_name).scalar_subquery()
+        active_rec_sub = select(func.count(Candidate.id)).where(
+            and_(
+                Candidate.company_name == company_name,
+                Candidate.status.in_([status.value for status in [
+                    CandidateStatus.APPLIED, 
+                    CandidateStatus.SCREENING, 
+                    CandidateStatus.INTERVIEW
+                ]])
+            )
+        ).scalar_subquery()
+        leaves_sub = select(func.count(LeaveRequest.id)).where(
+            and_(
+                LeaveRequest.company_name == company_name,
+                LeaveRequest.status == LeaveStatus.PENDING
+            )
+        ).scalar_subquery()
+        total_tasks_sub = select(func.count(Task.id)).where(Task.company_name == company_name).scalar_subquery()
+        completed_tasks_sub = select(func.count(Task.id)).where(
+            and_(
+                Task.company_name == company_name,
+                Task.status == TaskStatus.COMPLETED
+            )
+        ).scalar_subquery()
+        open_pos_sub = select(func.count(Candidate.id)).where(
+            and_(
+                Candidate.company_name == company_name,
+                Candidate.status == CandidateStatus.APPLIED
+            )
+        ).scalar_subquery()
+        recent_tasks_sub = select(func.count(Task.id)).where(
+            and_(
+                Task.company_name == company_name,
+                Task.created_at >= month_ago
+            )
+        ).scalar_subquery()
+        recent_completed_sub = select(func.count(Task.id)).where(
+            and_(
+                Task.company_name == company_name,
+                Task.status == TaskStatus.COMPLETED,
+                Task.created_at >= month_ago
+            )
+        ).scalar_subquery()
+        new_reports_sub = select(func.count(Task.id)).where(
+            and_(
+                Task.company_name == company_name,
+                Task.title.ilike('%report%'),
+                Task.created_at >= month_ago
+            )
+        ).scalar_subquery()
+
+        # Execute all subqueries in one query roundtrip
+        res = db.execute(select(
+            emp_sub, active_rec_sub, leaves_sub, total_tasks_sub, 
+            completed_tasks_sub, open_pos_sub, recent_tasks_sub, 
+            recent_completed_sub, new_reports_sub
+        )).first()
+
+        if res:
+            (
+                total_employees, active_recruitment, pending_leaves, total_tasks,
+                completed_tasks, open_positions, recent_tasks, recent_completed, new_reports
+            ) = res
+        else:
+            total_employees = active_recruitment = pending_leaves = total_tasks = 0
+            completed_tasks = open_positions = recent_tasks = recent_completed = new_reports = 0
+
+        total_employees = total_employees or 0
+        active_recruitment = active_recruitment or 0
+        pending_leaves = pending_leaves or 0
+        total_tasks = total_tasks or 0
+        completed_tasks = completed_tasks or 0
+        open_positions = open_positions or 0
+        recent_tasks = recent_tasks or 0
+        recent_completed = recent_completed or 0
+        new_reports = new_reports or 0
 
         # Get total and used budget for utilization calculation
         current_budget = db.query(Budget).filter(
@@ -74,56 +141,14 @@ async def get_dashboard_stats(
             budget_utilization = int((total_spent / total_allocated) * 100) if total_allocated > 0 else 0
             budget_status = budget_utilization
 
-        # Get pending leaves count for the company
-        pending_leaves = db.query(func.count(LeaveRequest.id)).filter(
-            LeaveRequest.company_name == company_name,
-            LeaveRequest.status == LeaveStatus.PENDING
-        ).scalar() or 0
-
-        # Additional metrics for module cards
-        
-        # Employee productivity (task completion percentage) for the company
-        total_tasks = db.query(func.count(Task.id)).filter(
-            Task.company_name == company_name
-        ).scalar() or 1
-        completed_tasks = db.query(func.count(Task.id)).filter(
-            Task.company_name == company_name,
-            Task.status == TaskStatus.COMPLETED
-        ).scalar() or 0
         employee_productivity = int((completed_tasks / total_tasks) * 100) if total_tasks > 0 else 0
-        
-        # Open positions (active job openings) for the company
-        open_positions = db.query(func.count(Candidate.id)).filter(
-            Candidate.company_name == company_name,
-            Candidate.status == CandidateStatus.APPLIED
-        ).scalar() or 0
-        
-        # Social media impressions (aggregate across campaigns) for the company
-        social_campaigns = db.query(SocialMediaCampaign).filter(
-            SocialMediaCampaign.company_name == company_name
-        ).all()
-        total_impressions = sum(campaign.roi for campaign in social_campaigns) if social_campaigns else 0
-        social_impressions = int(total_impressions / 1000) if total_impressions > 1000 else total_impressions
-        
-        # Task completion rate for the past 30 days for the company
-        month_ago = datetime.now() - timedelta(days=30)
-        recent_tasks = db.query(func.count(Task.id)).filter(
-            Task.company_name == company_name,
-            Task.created_at >= month_ago
-        ).scalar() or 1
-        recent_completed = db.query(func.count(Task.id)).filter(
-            Task.company_name == company_name,
-            Task.status == TaskStatus.COMPLETED,
-            Task.created_at >= month_ago
-        ).scalar() or 0
         task_completion = int((recent_completed / recent_tasks) * 100) if recent_tasks > 0 else 0
-        
-        # Number of new analytics reports for the company
-        new_reports = db.query(func.count(Task.id)).filter(
-            Task.company_name == company_name,
-            Task.title.ilike('%report%'),
-            Task.created_at >= month_ago
+
+        # Social media impressions (aggregate across campaigns) for the company
+        total_impressions = db.query(func.sum(SocialMediaCampaign.roi)).filter(
+            SocialMediaCampaign.company_name == company_name
         ).scalar() or 0
+        social_impressions = int(total_impressions / 1000) if total_impressions > 1000 else int(total_impressions)
 
         result = {
             "totalEmployees": total_employees,

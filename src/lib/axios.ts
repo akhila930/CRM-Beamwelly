@@ -66,4 +66,52 @@ api.interceptors.response.use(
   }
 );
 
+// Smart Request Cache & Deduplication Layer
+const getCache = new Map<string, { promise: Promise<any>; timestamp: number }>();
+const CACHE_TTL = 3000; // 3 seconds TTL
+
+const originalGet = api.get;
+api.get = function (url: string, config?: any) {
+  // Bypass cache for blobs (downloads)
+  if (config?.responseType === 'blob') {
+    return originalGet.apply(this, [url, config]);
+  }
+  
+  const cacheKey = JSON.stringify({ url, params: config?.params });
+  const cached = getCache.get(cacheKey);
+  const now = Date.now();
+  
+  if (cached && (now - cached.timestamp < CACHE_TTL)) {
+    return cached.promise;
+  }
+  
+  const promise = originalGet.apply(this, [url, config]).catch((err) => {
+    // If request fails, remove from cache immediately so retries/refresh work
+    getCache.delete(cacheKey);
+    throw err;
+  });
+  
+  getCache.set(cacheKey, { promise, timestamp: now });
+  return promise;
+} as any;
+
+// Clear GET cache on any write (POST, PUT, DELETE) to guarantee consistency
+const originalPost = api.post;
+api.post = function (url: string, data?: any, config?: any) {
+  getCache.clear();
+  return originalPost.apply(this, [url, data, config]);
+} as any;
+
+const originalPut = api.put;
+api.put = function (url: string, data?: any, config?: any) {
+  getCache.clear();
+  return originalPut.apply(this, [url, data, config]);
+} as any;
+
+const originalDelete = api.delete;
+api.delete = function (url: string, config?: any) {
+  getCache.clear();
+  return originalDelete.apply(this, [url, config]);
+} as any;
+
 export default api;

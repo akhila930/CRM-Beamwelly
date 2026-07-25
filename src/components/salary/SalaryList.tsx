@@ -172,11 +172,6 @@ export function SalaryList({ selectedMonth }: SalaryListProps) {
               <Input placeholder="Search employee..." className="pl-8 w-full" />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={handleProcessPayments} disabled={processing}>
-              {processing ? 'Processing...' : 'Process Payments'}
-            </Button>
-          </div>
         </div>
         <div className="rounded-md border overflow-x-auto">
           <Table>

@@ -12,7 +12,7 @@ import { employeeService } from "@/services/employeeService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/use-toast";
-import { api } from "@/lib/api";
+import api from "@/lib/axios";
 
 export default function SalaryManagement() {
   const [selectedTab, setSelectedTab] = useState("payroll");
@@ -26,7 +26,9 @@ export default function SalaryManagement() {
   });
 
   useEffect(() => {
-    employeeService.getAllEmployees().then(setEmployees);
+    employeeService.getAllEmployees()
+      .then(setEmployees)
+      .catch((err) => console.error("Failed to load employees:", err));
   }, []);
 
   const handleProcessPayments = async () => {
@@ -37,9 +39,10 @@ export default function SalaryManagement() {
       
       // Calculate total processed amount and send emails
       let totalProcessed = 0;
-      const emailPromises = [];
+      let successCount = 0;
+      const failedEmployees: string[] = [];
 
-      for (const emp of employees) {
+      const emailPromises = employees.map(async (emp) => {
         const comps = componentsByEmp[emp.id] || [];
         let earnings = 0, deductions = 0;
         comps.forEach(c => {
@@ -55,7 +58,7 @@ export default function SalaryManagement() {
         // Generate payslip data for email
         const payslipData = {
           employeeName: emp.name,
-          employeeId: emp.id,
+          employeeId: String(emp.id),
           basicSalary: emp.salary,
           totalEarnings: earnings,
           totalDeductions: deductions,
@@ -65,20 +68,23 @@ export default function SalaryManagement() {
           year: new Date(selectedMonth).getFullYear()
         };
 
-        // Send email for each employee
-        emailPromises.push(
-          api.post('/api/salary/send-payslip', {
-            employeeId: emp.id,
+        try {
+          await api.post('/api/salary/send-payslip', {
+            employeeId: String(emp.id),
             employeeEmail: emp.email,
             month: payslipData.month,
             year: payslipData.year,
             payslipData: payslipData
-          }).catch(error => {
-            console.error(`Failed to send email to ${emp.email}:`, error);
-            return null;
-          })
-        );
-      }
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to send email to ${emp.email || emp.name}:`, error);
+          failedEmployees.push(emp.name);
+        }
+      });
+
+      // Wait for all emails to be sent
+      await Promise.all(emailPromises);
 
       // Store processed amount in localStorage
       const processedPayments = JSON.parse(localStorage.getItem('processedPayments') || '{}');
@@ -90,16 +96,20 @@ export default function SalaryManagement() {
       monthlyComponents[selectedMonth] = componentsByEmp;
       localStorage.setItem('monthlyComponents', JSON.stringify(monthlyComponents));
 
-      // Wait for all emails to be sent
-      await Promise.all(emailPromises);
+      let message = `Successfully emailed payslips to ${successCount} employees.`;
+      if (failedEmployees.length > 0) {
+        message += ` Could not send payslip to: ${failedEmployees.join(', ')}.`;
+      }
 
       toast({
         title: "Payments Processed",
-        description: `Successfully processed payments totaling ₹${totalProcessed.toLocaleString()} and sent payslips to all employees`,
+        description: message,
       });
 
       // Refresh the page to update the UI
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
     } catch (error) {
       console.error('Payment processing error:', error);
       toast({
@@ -167,6 +177,16 @@ export default function SalaryManagement() {
                   </TabsList>
                   <TabsContent value="payroll">
                     <div className="space-y-6">
+                      <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg text-sm flex items-start gap-3 shadow-sm">
+                        <span className="text-amber-600 font-bold text-base">⚠️</span>
+                        <div>
+                          <p className="font-semibold text-amber-800">Important Note</p>
+                          <p className="text-amber-700 mt-0.5">
+                            Kindly add the salary components of each employee separately if you wish and only then process the payments.
+                          </p>
+                        </div>
+                      </div>
+
                       <div className="flex justify-between items-center">
                         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                           <SelectTrigger className="w-[200px]">

@@ -34,7 +34,7 @@ interface EditExpenseDialogProps {
   departments: string[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (id: number, data: Partial<Expense>) => Promise<void>;
+  onSave: (id: number, data: FormData) => Promise<void>;
 }
 
 export function EditExpenseDialog({ expense, departments, isOpen, onClose, onSave }: EditExpenseDialogProps) {
@@ -45,10 +45,20 @@ export function EditExpenseDialog({ expense, departments, isOpen, onClose, onSav
     date: expense.date,
     description: expense.description
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await onSave(expense.id, formData);
+    const submitData = new FormData();
+    submitData.append('type', formData.type);
+    submitData.append('amount', String(formData.amount));
+    submitData.append('department', formData.department);
+    submitData.append('date', formData.date);
+    submitData.append('description', formData.description);
+    if (selectedFile) {
+      submitData.append('receipt', selectedFile);
+    }
+    await onSave(expense.id, submitData);
     onClose();
   };
 
@@ -57,6 +67,12 @@ export function EditExpenseDialog({ expense, departments, isOpen, onClose, onSav
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
   };
 
   return (
@@ -131,6 +147,20 @@ export function EditExpenseDialog({ expense, departments, isOpen, onClose, onSav
                 required
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="receipt">Receipt (PDF only)</Label>
+              {expense.receipt_url && (
+                <div className="text-xs text-muted-foreground mb-1">
+                  Current receipt: <span className="font-semibold">{expense.receipt_url.split('/').pop()}</span>
+                </div>
+              )}
+              <Input 
+                id="receipt" 
+                type="file" 
+                onChange={handleFileChange} 
+                accept=".pdf"
+              />
+            </div>
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -142,4 +172,4 @@ export function EditExpenseDialog({ expense, departments, isOpen, onClose, onSav
       </DialogContent>
     </Dialog>
   );
-} 
+}

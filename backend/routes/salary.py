@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class PayslipEmailRequest(BaseModel):
-    employeeId: str
+    employeeId: Union[str, int]
     employeeEmail: str
     month: str
     year: int

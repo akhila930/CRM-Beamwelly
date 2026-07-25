@@ -551,14 +551,22 @@ export const EmployeeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Helper to get employee by email
   const getEmployeeByEmail = async (email: string) => {
+    if (employees && employees.length > 0) {
+      const emp = employees.find(emp => emp.email === email);
+      if (emp) return emp;
+    }
     try {
       const allEmployees = await employeeService.getAllEmployees();
+      if (employees.length === 0) {
+        setEmployees(allEmployees);
+      }
       return allEmployees.find(emp => emp.email === email) || null;
     } catch (error) {
       console.error('Failed to fetch employee by email:', error);
       return null;
     }
   };
+
 
   return (
     <EmployeeContext.Provider

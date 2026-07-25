@@ -31,13 +31,24 @@ export default function Recruitment() {
 
   useEffect(() => {
     const fetchEmployee = async () => {
-      if (!user?.email) return;
-      const emp = await getEmployeeByEmail(user.email);
-      setEmployee(emp);
-      setLoading(false);
+      if (!user?.email) {
+        // If auth isn't resolved yet, wait, but don't hang if user is definitely not logged in
+        if (user === null) {
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const emp = await getEmployeeByEmail(user.email);
+        setEmployee(emp);
+      } catch (error) {
+        console.error("Error fetching employee:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchEmployee();
-  }, [getEmployeeByEmail, user?.email]);
+  }, [getEmployeeByEmail, user]);
 
   const handleDownloadTemplate = async () => {
     try {
